@@ -1,0 +1,1 @@
+"""Map and GeoJSON API endpoints."""

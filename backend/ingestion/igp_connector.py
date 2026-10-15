@@ -1,0 +1,1 @@
+"""Connector for the IGP seismic data source."""
