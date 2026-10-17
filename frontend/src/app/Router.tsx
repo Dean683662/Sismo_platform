@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { ArrowUpRight, Construction } from "lucide-react";
 import { Link, Route, Routes, useLocation } from "react-router-dom";
 
@@ -7,6 +8,14 @@ import DashboardView from "../modules/dashboard/DashboardView";
 import EventosView from "../modules/eventos/EventosView";
 import FuentesView from "../modules/fuentes-datos/FuentesView";
 import UsuariosView from "../modules/usuarios-roles/UsuariosView";
+
+const AnalisisView = lazy(() => import("../modules/analisis/AnalisisView"));
+const MapView = lazy(() => import("../modules/mapa-sismico/MapView"));
+const ModelosMLView = lazy(() => import("../modules/modelos-ml/ModelosMLView"));
+
+function LazyModule({ children }: { children: React.ReactNode }) {
+	return <Suspense fallback={<div className="auth-loading" role="status">Cargando módulo…</div>}>{children}</Suspense>;
+}
 
 const modules: Record<string, { title: string; group: string; description: string; permission?: string }> = {
 	"/eventos": { title: "Eventos sísmicos", group: "Operación", description: "Catálogo de eventos reportados, con procedencia, filtros y detalle.", permission: "events:read" },
@@ -53,6 +62,9 @@ export default function Router() {
 		<Routes>
 			<Route path="/" element={<DashboardView />} />
 			<Route path="/eventos" element={<ProtectedModule permission="events:read"><EventosView /></ProtectedModule>} />
+			<Route path="/mapa" element={<ProtectedModule permission="events:read"><LazyModule><MapView /></LazyModule></ProtectedModule>} />
+			<Route path="/analisis" element={<ProtectedModule permission="analytics:read"><LazyModule><AnalisisView /></LazyModule></ProtectedModule>} />
+			<Route path="/modelos" element={<ProtectedModule permission="models:read"><LazyModule><ModelosMLView /></LazyModule></ProtectedModule>} />
 			<Route path="/fuentes" element={<ProtectedModule permission="sources:read"><FuentesView /></ProtectedModule>} />
 			<Route path="/usuarios" element={<ProtectedModule permission="users:read"><UsuariosView /></ProtectedModule>} />
 			<Route path="/auditoria" element={<ProtectedModule permission="audit:read"><AuditoriaView /></ProtectedModule>} />

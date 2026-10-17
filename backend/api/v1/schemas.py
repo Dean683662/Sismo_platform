@@ -115,3 +115,75 @@ class DataSourceResponse(BaseModel):
 
 class SyncRunResponse(IngestionRunSummary):
     source_id: str
+
+
+class DashboardSummaryResponse(BaseModel):
+    total_events: int
+    events_last_24h: int
+    latest_event_at: datetime | None
+    active_sources: int
+    total_sources: int
+    last_sync_at: datetime | None
+
+
+class TimeSeriesPoint(BaseModel):
+    period_start: datetime
+    event_count: int
+
+
+class TimeSeriesResponse(BaseModel):
+    items: list[TimeSeriesPoint]
+    total_events: int
+    period_start: datetime
+    period_end: datetime
+    group_by: Literal["day", "week"]
+
+
+class DatasetCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    start_date: datetime | None = None
+    end_date: datetime | None = None
+    min_magnitude: float | None = Field(default=None, ge=0, le=10)
+    max_magnitude: float | None = Field(default=None, ge=0, le=10)
+
+    @model_validator(mode="after")
+    def validate_ranges(self) -> "DatasetCreateRequest":
+        if self.start_date and self.end_date and self.start_date > self.end_date:
+            raise ValueError("start_date must not be after end_date")
+        if self.min_magnitude is not None and self.max_magnitude is not None and self.min_magnitude > self.max_magnitude:
+            raise ValueError("min_magnitude must not exceed max_magnitude")
+        return self
+
+
+class DatasetResponse(BaseModel):
+    id: str
+    name: str
+    version: int
+    query_spec: dict
+    period_start: datetime | None
+    period_end: datetime | None
+    row_count: int
+    quality_report: dict
+    created_at: datetime
+
+
+class ExperimentCreateRequest(BaseModel):
+    name: str = Field(min_length=2, max_length=160)
+    dataset_id: str
+    test_fraction: float = Field(default=0.2, ge=0.1, le=0.5)
+
+
+class ExperimentResponse(BaseModel):
+    id: str
+    name: str
+    task_type: str
+    algorithm: str
+    dataset_id: str
+    feature_spec: list[str]
+    target_name: str
+    params: dict
+    metrics: dict[str, float]
+    validation_spec: dict
+    status: str
+    limitations: str
+    created_at: datetime

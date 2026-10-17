@@ -120,7 +120,7 @@ export default function Layout() {
 				</header>
 				{logoutError && <div className="logout-error" role="alert">No se pudo cerrar la sesión. Intenta nuevamente.</div>}
 				<main className="page-content"><Router /></main>
-				<footer className="app-footer"><span>SISMO · Plataforma de monitoreo sísmico</span><span>Control de acceso · Fase 2</span></footer>
+				<footer className="app-footer"><span>SISMO · Plataforma de monitoreo sísmico</span><span>Datos observados · ML experimental</span></footer>
 			</div>
 		</div>
 	);

@@ -60,7 +60,24 @@ La integración CI ejecuta ambas verificaciones para cada push y pull request.
 - Fase 2: sesiones seguras, roles de mínimo privilegio, gestión de usuarios protegida y bitácora de acciones críticas implementadas.
 - Fase 3: conector IGP verificado, normalización, deduplicación, registro de ejecuciones, catálogo filtrable y procedencia de eventos.
 - La Fase 3 consulta `https://ultimosismo.igp.gob.pe/api/ultimo-sismo`, que entrega un único evento reciente. No es un feed histórico; sincronizarlo periódicamente solo conserva los eventos que el proveedor publique entre consultas. Confirmar términos de uso y disponibilidad de un catálogo histórico con el IGP antes de producción.
-- Las gráficas, el mapa y los indicadores con datos reales pertenecen a la Fase 4. El sistema no predice terremotos y separa eventos observados de estimaciones experimentales y alertas oficiales.
+- Fase 4: resumen operativo, series temporales, distribuciones descriptivas, dispersión magnitud/profundidad y mapa GeoJSON/Leaflet con filtros por periodo.
+- Fase 5: snapshots inmutables de eventos, numeración de versiones e informe de filas válidas, inválidas, duplicados y valores faltantes.
+- Fase 6: baseline de regresión lineal para estudiar magnitudes ya reportadas; separación cronológica de entrenamiento/evaluación, MAE/RMSE/R² y metadatos del experimento.
+- El baseline es didáctico y no predice terremotos futuros. El endpoint IGP actual solo expone el último evento reportado; hace falta un catálogo histórico con licencia confirmada antes de obtener experimentos estadísticamente útiles.
+
+## Analítica y experimentos
+
+Las rutas nuevas requieren sesión autenticada y permisos RBAC. Crear datasets y entrenar modelos también requiere CSRF; los roles `administrator` y `analyst` tienen permisos de gestión del laboratorio.
+
+- `GET /api/v1/dashboard/summary`: total de eventos, actividad de 24 horas y estado resumido de fuentes.
+- `GET /api/v1/analytics/timeseries`: conteos diarios/semanales con filtros de fechas y magnitud.
+- `GET /api/v1/events/geojson`: puntos GeoJSON de eventos observados, con límite de 5.000.
+- `POST /api/v1/datasets`: crea una versión nueva del snapshot filtrado, máximo 50.000 filas.
+- `GET /api/v1/datasets` y `GET /api/v1/datasets/{id}/quality`: catálogo de snapshots e informe de calidad.
+- `POST /api/v1/ml/experiments`: entrena/evalúa un baseline sobre una versión inmutable; requiere al menos cinco eventos válidos.
+- `GET /api/v1/ml/experiments` y `GET /api/v1/ml/experiments/{id}`: historial de métricas, features, objetivo y periodo de validación.
+
+Aplicar el esquema con `alembic upgrade head` después de configurar `DATABASE_URL`.
 
 ## Ingesta y catálogo
 

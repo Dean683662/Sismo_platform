@@ -118,3 +118,39 @@ class SeismicEvent(Base):
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
     payload_hash: Mapped[str] = mapped_column(String(64), nullable=False)
     review_status: Mapped[str] = mapped_column(String(30), nullable=False, default="reported", server_default="reported")
+
+
+class Dataset(Base):
+    __tablename__ = "datasets"
+    __table_args__ = (UniqueConstraint("name", "version", name="uq_datasets_name_version"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(160), nullable=False, index=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False)
+    query_spec: Mapped[dict] = mapped_column(JSON, nullable=False)
+    period_start: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    period_end: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    quality_report: Mapped[dict] = mapped_column(JSON, nullable=False)
+    records_json: Mapped[list] = mapped_column(JSON, nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class MLExperiment(Base):
+    __tablename__ = "ml_experiments"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(160), nullable=False)
+    task_type: Mapped[str] = mapped_column(String(30), nullable=False)
+    algorithm: Mapped[str] = mapped_column(String(80), nullable=False)
+    dataset_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("datasets.id", ondelete="RESTRICT"), nullable=False, index=True)
+    feature_spec: Mapped[list] = mapped_column(JSON, nullable=False)
+    target_name: Mapped[str] = mapped_column(String(80), nullable=False)
+    params: Mapped[dict] = mapped_column(JSON, nullable=False)
+    metrics: Mapped[dict] = mapped_column(JSON, nullable=False)
+    validation_spec: Mapped[dict] = mapped_column(JSON, nullable=False)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, default="completed", server_default="completed")
+    limitations: Mapped[str] = mapped_column(Text, nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())

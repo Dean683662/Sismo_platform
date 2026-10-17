@@ -21,10 +21,10 @@ dummy_password_hash = password_hasher.hash("invalid-password-used-for-timing-equ
 ROLE_PERMISSIONS: dict[str, set[str]] = {
 	"administrator": {
 		"users:read", "users:write", "audit:read", "settings:manage", "events:read",
-		"analytics:read", "models:read", "estimates:read", "reports:read", "alerts:read",
+		"analytics:read", "datasets:manage", "models:read", "models:manage", "estimates:read", "reports:read", "alerts:read",
 		"alerts:manage", "sources:read", "sources:manage",
 	},
-	"analyst": {"events:read", "analytics:read", "models:read", "estimates:read", "reports:read"},
+	"analyst": {"events:read", "analytics:read", "datasets:manage", "models:read", "models:manage", "estimates:read", "reports:read"},
 	"alert_operator": {"events:read", "alerts:read", "alerts:manage"},
 	"auditor": {"events:read", "reports:read", "audit:read"},
 	"read_only": {"events:read", "analytics:read", "reports:read"},
