@@ -32,6 +32,9 @@ export interface Experiment {
 		train_period: [string, string];
 		evaluation_period: [string, string];
 		row_count: number;
+		class_labels?: string[];
+		confusion_matrix?: number[][];
+		training_class_counts?: Record<string, number>;
 	};
 	status: string;
 	limitations: string;

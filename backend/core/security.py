@@ -25,7 +25,7 @@ ROLE_PERMISSIONS: dict[str, set[str]] = {
 		"alerts:manage", "sources:read", "sources:manage",
 	},
 	"analyst": {"events:read", "analytics:read", "datasets:manage", "models:read", "models:manage", "estimates:read", "reports:read"},
-	"alert_operator": {"events:read", "alerts:read", "alerts:manage"},
+	"alert_operator": {"events:read", "alerts:read", "alerts:manage", "sources:read"},
 	"auditor": {"events:read", "reports:read", "audit:read"},
 	"read_only": {"events:read", "analytics:read", "reports:read"},
 }

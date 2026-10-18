@@ -73,6 +73,7 @@ class DataSource(Base):
     organization: Mapped[str] = mapped_column(String(120), nullable=False)
     base_url: Mapped[str] = mapped_column(String(500), nullable=False)
     source_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    is_verified: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", server_default="active")
     last_sync_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     last_success_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -91,6 +92,7 @@ class IngestionRun(Base):
     records_inserted: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     records_updated: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     records_duplicated: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    records_skipped: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
     error_summary: Mapped[str | None] = mapped_column(String(500))
 
 
@@ -154,3 +156,53 @@ class MLExperiment(Base):
     limitations: Mapped[str] = mapped_column(Text, nullable=False)
     created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class AlertRule(Base):
+    __tablename__ = "alert_rules"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    name: Mapped[str] = mapped_column(String(120), nullable=False)
+    is_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default="true")
+    min_magnitude: Mapped[float] = mapped_column(Float, nullable=False)
+    min_depth_km: Mapped[float | None] = mapped_column(Float)
+    region_bounds: Mapped[dict | None] = mapped_column(JSON)
+    source_ids: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    channel: Mapped[str] = mapped_column(String(30), nullable=False, default="in_app", server_default="in_app")
+    requires_approval: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    template: Mapped[str] = mapped_column(String(500), nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+    updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
+
+
+class AlertDelivery(Base):
+    __tablename__ = "alert_deliveries"
+    __table_args__ = (UniqueConstraint("deduplication_key", name="uq_alert_deliveries_deduplication_key"),)
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    rule_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("alert_rules.id", ondelete="CASCADE"), nullable=False, index=True)
+    event_id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), ForeignKey("seismic_events.id", ondelete="CASCADE"), nullable=False, index=True)
+    status: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    channel: Mapped[str] = mapped_column(String(30), nullable=False)
+    message: Mapped[str] = mapped_column(String(500), nullable=False)
+    deduplication_key: Mapped[str] = mapped_column(String(255), nullable=False)
+    is_test: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="false")
+    attempt_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0, server_default="0")
+    last_error: Mapped[str | None] = mapped_column(String(500))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)
+    delivered_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class ReportRun(Base):
+    __tablename__ = "report_runs"
+
+    id: Mapped[uuid.UUID] = mapped_column(Uuid(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    report_type: Mapped[str] = mapped_column(String(30), nullable=False, index=True)
+    filters: Mapped[dict] = mapped_column(JSON, nullable=False)
+    row_count: Mapped[int] = mapped_column(Integer, nullable=False)
+    records_json: Mapped[list] = mapped_column(JSON, nullable=False)
+    created_by: Mapped[uuid.UUID | None] = mapped_column(Uuid(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now(), index=True)

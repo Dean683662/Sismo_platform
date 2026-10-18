@@ -76,9 +76,11 @@ export default function DashboardView() {
 					<span className="metric-foot">Consulta registrada del proveedor</span>
 				</article>
 				<article className="metric-panel metric-panel-accent">
-					<div className="metric-top"><span>Alcance implementado</span><MapPinned size={17} /></div>
-					<strong className="metric-value metric-value-text">Fases 1–6</strong>
-					<span className="metric-foot">ML experimental, no predictivo</span>
+					<div className="metric-top"><span>Último evento observado</span><MapPinned size={17} /></div>
+					<strong className="metric-value metric-value-text">
+						{summary ? (summary.latest_event_at ? formatDate(summary.latest_event_at) : "Sin eventos") : "—"}
+					</strong>
+					<span className="metric-foot">Fecha y hora del evento (UTC)</span>
 				</article>
 			</section>
 

@@ -5,7 +5,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -64,6 +64,7 @@ def client() -> Generator[TestClient, None, None]:
 			db.close()
 
 	app.dependency_overrides[get_db] = override_get_db
+	app.state.analytics_test_session_factory = session_factory
 	with TestClient(app) as test_client:
 		test_client.post(
 			"/api/v1/auth/login",
@@ -71,6 +72,7 @@ def client() -> Generator[TestClient, None, None]:
 		)
 		yield test_client
 	app.dependency_overrides.clear()
+	del app.state.analytics_test_session_factory
 	Base.metadata.drop_all(engine)
 	engine.dispose()
 
@@ -93,6 +95,37 @@ def test_dashboard_timeseries_and_geojson_share_event_data(client: TestClient) -
 	assert geojson.status_code == 200
 	assert len(geojson.json()["features"]) == 3
 	assert geojson.json()["features"][0]["geometry"]["coordinates"] == [-74.05, -8.1]
+
+
+def test_geojson_applies_time_magnitude_and_geographic_filters(client: TestClient) -> None:
+	response = client.get(
+		"/api/v1/events/geojson",
+		params={
+			"start_date": "2026-01-10T00:00:00Z",
+			"end_date": "2026-01-20T00:00:00Z",
+			"min_magnitude": 2.9,
+			"max_magnitude": 3.5,
+			"min_latitude": -9.1,
+			"max_latitude": -8.5,
+			"min_longitude": -74.8,
+			"max_longitude": -74.4,
+		},
+	)
+	assert response.status_code == 200
+	features = response.json()["features"]
+	assert len(features) == 4
+	assert all(2.9 <= item["properties"]["magnitude"] <= 3.5 for item in features)
+	assert all(-9.1 <= item["geometry"]["coordinates"][1] <= -8.5 for item in features)
+
+
+def test_geojson_rejects_partial_or_inverted_geographic_bounds(client: TestClient) -> None:
+	partial = client.get("/api/v1/events/geojson", params={"min_latitude": -10})
+	inverted = client.get(
+		"/api/v1/events/geojson",
+		params={"min_latitude": 5, "max_latitude": -5, "min_longitude": -80, "max_longitude": -70},
+	)
+	assert partial.status_code == 422
+	assert inverted.status_code == 422
 
 
 def test_dataset_snapshot_versions_and_trains_experiment(client: TestClient) -> None:
@@ -143,3 +176,33 @@ def test_training_rejects_too_small_dataset(client: TestClient) -> None:
 	)
 	assert response.status_code == 422
 	assert "five valid" in response.json()["detail"]
+
+
+def test_classification_experiment_is_available_through_the_api(client: TestClient) -> None:
+	with app.state.analytics_test_session_factory() as db:
+		events = db.scalars(select(SeismicEvent).order_by(SeismicEvent.occurred_at)).all()
+		for index, event in enumerate(events):
+			event.magnitude = [3.0, 4.5, 5.5][index % 3]
+		db.commit()
+
+	csrf = client.cookies.get("sismo_csrf", "")
+	dataset = client.post(
+		"/api/v1/datasets",
+		json={"name": "Bandas reportadas"},
+		headers={"X-CSRF-Token": csrf},
+	)
+	assert dataset.status_code == 201
+	experiment = client.post(
+		"/api/v1/ml/experiments",
+		json={
+			"name": "Clasificación temporal",
+			"dataset_id": dataset.json()["id"],
+			"task_type": "classification",
+		},
+		headers={"X-CSRF-Token": csrf},
+	)
+	assert experiment.status_code == 201
+	assert experiment.json()["task_type"] == "classification"
+	assert experiment.json()["target_name"] == "reported_magnitude_band"
+	assert len(experiment.json()["validation_spec"]["confusion_matrix"]) == 3
+	assert experiment.json()["params"]["library_versions"]["scikit_learn"]

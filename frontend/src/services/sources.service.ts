@@ -8,3 +8,7 @@ export function listDataSources(): Promise<DataSource[]> {
 export function syncDataSource(sourceId: string): Promise<IngestionRun & { source_id: string }> {
 	return apiRequest<IngestionRun & { source_id: string }>(`/sources/${sourceId}/sync`, { method: "POST" });
 }
+
+export function importHistoricalCatalog(sourceId: string): Promise<IngestionRun & { source_id: string }> {
+	return apiRequest<IngestionRun & { source_id: string }>(`/sources/${sourceId}/backfill`, { method: "POST" });
+}

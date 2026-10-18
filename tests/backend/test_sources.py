@@ -33,6 +33,25 @@ class FixtureConnector:
 		]
 
 
+class FixtureHistoricalConnector:
+	provider_key = "igp"
+
+	def fetch_events(self) -> list[dict]:
+		return [
+			{
+				"codigo": "igp-historical-fixture-1",
+				"fecha_hora": "1552-07-02T10:30:00+00:00",
+				"magnitud": 7.6,
+				"tipo_magnitud": "MB",
+				"referencia": "Catálogo histórico IGP (Perú)",
+				"latitud": -16.6,
+				"longitud": -71.3,
+				"profundidad": 30,
+				"source_url": "https://ultimosismo.igp.gob.pe/repositorio/datos-sismicos",
+			}
+		]
+
+
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]:
 	engine = create_engine(
@@ -57,10 +76,11 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]
 		db.add(
 			DataSource(
 				provider_key="igp",
-				name="Último sismo reportado",
+				name="Catálogo sísmico del IGP",
 				organization="Instituto Geofísico del Perú",
-				base_url="https://ultimosismo.igp.gob.pe/api/ultimo-sismo",
+				base_url="https://ultimosismo.igp.gob.pe/repositorio/datos-sismicos",
 				source_type="official_api",
+				is_verified=True,
 			)
 		)
 
@@ -72,6 +92,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> Generator[TestClient, None, None]
 			db.close()
 
 	monkeypatch.setattr(sources_endpoint, "IGPConnector", FixtureConnector)
+	monkeypatch.setattr(sources_endpoint, "IGPHistoricalCatalogConnector", FixtureHistoricalConnector)
 	app.dependency_overrides[get_db] = override_get_db
 	with TestClient(app) as test_client:
 		yield test_client
@@ -99,6 +120,7 @@ def test_manual_sync_requires_csrf_and_records_run(client: TestClient) -> None:
 	assert run.status_code == 200
 	assert run.json()["status"] == "succeeded"
 	assert run.json()["records_inserted"] == 1
+	assert run.json()["records_skipped"] == 0
 
 	events = client.get("/api/v1/events").json()
 	assert events["total"] == 1
@@ -109,3 +131,36 @@ def test_manual_sync_requires_csrf_and_records_run(client: TestClient) -> None:
 
 	audit = client.get("/api/v1/admin/audit-logs").json()
 	assert any(entry["action"] == "ingestion.manual_sync" for entry in audit)
+
+
+def test_historical_import_requires_csrf_and_skips_alert_delivery(client: TestClient) -> None:
+	login = client.post(
+		"/api/v1/auth/login",
+		json={"email": "ingestion-admin@example.com", "password": "ClaveIngesta-Segura-123"},
+	)
+	assert login.status_code == 200
+	source = client.get("/api/v1/sources").json()[0]
+	csrf = client.cookies.get("sismo_csrf", "")
+
+	rule = client.post(
+		"/api/v1/alerts/rules",
+		headers={"X-CSRF-Token": csrf},
+		json={"name": "Umbral histórico", "min_magnitude": 1},
+	)
+	assert rule.status_code == 201
+	assert client.post(f"/api/v1/sources/{source['id']}/backfill").status_code == 403
+
+	run = client.post(
+		f"/api/v1/sources/{source['id']}/backfill",
+		headers={"X-CSRF-Token": csrf},
+	)
+	assert run.status_code == 200
+	assert run.json()["status"] == "succeeded"
+	assert run.json()["records_inserted"] == 1
+	assert client.get("/api/v1/alerts/deliveries").json() == []
+	assert client.get("/api/v1/events").json()["items"][0]["external_id"] == "igp-historical-fixture-1"
+
+	audit = client.get("/api/v1/admin/audit-logs").json()
+	backfill_audit = next(entry for entry in audit if entry["action"] == "ingestion.historical_backfill")
+	assert backfill_audit["after_json"]["alerts_dispatched"] is False
+	assert backfill_audit["after_json"]["records_skipped"] == 0

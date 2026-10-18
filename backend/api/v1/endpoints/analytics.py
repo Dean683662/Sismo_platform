@@ -110,11 +110,29 @@ def event_geojson(
 	end_date: datetime | None = None,
 	min_magnitude: float | None = Query(default=None, ge=0, le=10),
 	max_magnitude: float | None = Query(default=None, ge=0, le=10),
+	min_latitude: float | None = Query(default=None, ge=-90, le=90),
+	max_latitude: float | None = Query(default=None, ge=-90, le=90),
+	min_longitude: float | None = Query(default=None, ge=-180, le=180),
+	max_longitude: float | None = Query(default=None, ge=-180, le=180),
 	limit: int = Query(default=2000, ge=1, le=5000),
 	db: Session = Depends(get_db),
 	_: User = Depends(require_permissions("events:read")),
 ) -> dict:
 	filters = _event_filters(start_date, end_date, min_magnitude, max_magnitude)
+	bounds = (min_latitude, max_latitude, min_longitude, max_longitude)
+	if any(value is not None for value in bounds) and not all(value is not None for value in bounds):
+		raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Provide all four geographic bounds")
+	if all(value is not None for value in bounds):
+		if min_latitude >= max_latitude or min_longitude >= max_longitude:
+			raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="Geographic bounds are invalid")
+		filters.extend(
+			(
+				SeismicEvent.latitude >= min_latitude,
+				SeismicEvent.latitude <= max_latitude,
+				SeismicEvent.longitude >= min_longitude,
+				SeismicEvent.longitude <= max_longitude,
+			)
+		)
 	rows = db.execute(
 		select(SeismicEvent, DataSource.provider_key)
 		.join(DataSource, DataSource.id == SeismicEvent.source_id)

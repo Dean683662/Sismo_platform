@@ -13,9 +13,13 @@ export function listExperiments(): Promise<Experiment[]> {
 	return apiRequest<Experiment[]>("/ml/experiments");
 }
 
-export function createExperiment(name: string, datasetId: string): Promise<Experiment> {
+export function createExperiment(
+	name: string,
+	datasetId: string,
+	taskType: "regression" | "classification",
+): Promise<Experiment> {
 	return apiRequest<Experiment>("/ml/experiments", {
 		method: "POST",
-		body: JSON.stringify({ name, dataset_id: datasetId, test_fraction: 0.2 }),
+		body: JSON.stringify({ name, dataset_id: datasetId, test_fraction: 0.2, task_type: taskType }),
 	});
 }

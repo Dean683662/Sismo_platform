@@ -79,7 +79,7 @@ export default function Layout() {
 	return (
 		<div className="app-shell">
 			<aside className="sidebar">
-				<NavLink to="/" className="brand" aria-label="Sismo, ir al resumen">
+				<NavLink to="/" className="brand">
 					<span className="brand-mark"><Activity size={20} strokeWidth={2.4} /></span>
 					<span className="brand-name">sismo<span>.</span><small>OBSERVATORIO</small></span>
 				</NavLink>
@@ -102,7 +102,7 @@ export default function Layout() {
 				<div className="sidebar-footer">
 					<div className="sidebar-footer-icon"><ShieldCheck size={17} /></div>
 					<div><strong>Sesión protegida</strong><span>{user?.roles.map((role) => role.replaceAll("_", " ")).join(", ")}</span></div>
-					<span className="status-dot connection-online-dot" aria-label="Autenticado" />
+					<span className="status-dot connection-online-dot" role="img" aria-label="Autenticado" />
 				</div>
 			</aside>
 

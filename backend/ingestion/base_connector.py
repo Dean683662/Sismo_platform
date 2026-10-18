@@ -9,6 +9,7 @@ class ConnectorError(RuntimeError):
 
 class BaseConnector(ABC):
 	provider_key: str
+	records_skipped: int = 0
 
 	@abstractmethod
 	def fetch_events(self) -> list[dict]:

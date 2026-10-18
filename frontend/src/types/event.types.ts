@@ -38,6 +38,7 @@ export interface IngestionRun {
 	records_inserted: number;
 	records_updated: number;
 	records_duplicated: number;
+	records_skipped: number;
 	error_summary: string | null;
 }
 
@@ -48,6 +49,7 @@ export interface DataSource {
 	organization: string;
 	base_url: string;
 	source_type: string;
+	is_verified: boolean;
 	status: string;
 	last_sync_at: string | null;
 	last_success_at: string | null;

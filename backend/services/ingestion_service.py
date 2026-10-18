@@ -1,5 +1,6 @@
 """Run a provider sync and persist normalized, idempotent event records."""
 
+import logging
 from datetime import datetime, timezone
 from uuid import UUID
 
@@ -10,9 +11,18 @@ from sqlalchemy.orm import Session
 from backend.database.models import DataSource, IngestionRun, SeismicEvent
 from backend.ingestion.base_connector import BaseConnector
 from backend.ingestion.normalizer import normalize_igp_event
+from backend.services.alert_service import dispatch_queued_deliveries, evaluate_event_alerts
 
 
-def sync_source(db: Session, source: DataSource, connector: BaseConnector) -> IngestionRun:
+logger = logging.getLogger(__name__)
+
+
+def sync_source(
+	db: Session,
+	source: DataSource,
+	connector: BaseConnector,
+	send_alerts: bool = True,
+) -> IngestionRun:
 	started_at = datetime.now(timezone.utc)
 	run = IngestionRun(source_id=source.id, started_at=started_at, status="running")
 	db.add(run)
@@ -24,7 +34,8 @@ def sync_source(db: Session, source: DataSource, connector: BaseConnector) -> In
 
 	try:
 		raw_events = connector.fetch_events()
-		run.records_seen = len(raw_events)
+		run.records_skipped = getattr(connector, "records_skipped", 0)
+		run.records_seen = len(raw_events) + run.records_skipped
 		for raw_event in raw_events:
 			event = normalize_igp_event(raw_event)
 			existing = db.scalar(
@@ -51,6 +62,8 @@ def sync_source(db: Session, source: DataSource, connector: BaseConnector) -> In
 				with db.begin_nested():
 					db.add(new_record)
 					db.flush()
+					if send_alerts:
+						evaluate_event_alerts(db, new_record, source)
 				run.records_inserted += 1
 			except IntegrityError:
 				duplicate = db.scalar(
@@ -68,6 +81,16 @@ def sync_source(db: Session, source: DataSource, connector: BaseConnector) -> In
 		source.status = "active"
 		source.last_success_at = run.finished_at
 		db.commit()
+		if send_alerts:
+			try:
+				dispatch_queued_deliveries(db)
+			except Exception as error:
+				db.rollback()
+				logger.error(
+					"Queued alert delivery deferred after ingestion: source_id=%s error_type=%s",
+					source_id,
+					type(error).__name__,
+				)
 		return run
 	except Exception as error:
 		db.rollback()

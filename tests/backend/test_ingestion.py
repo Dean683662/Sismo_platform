@@ -2,9 +2,11 @@
 
 from collections.abc import Generator
 from datetime import timezone
+from io import BytesIO
 
 import pytest
 import httpx
+from openpyxl import Workbook
 from pydantic import ValidationError
 from sqlalchemy import create_engine, func, select
 from sqlalchemy.orm import Session, sessionmaker
@@ -12,8 +14,9 @@ from sqlalchemy.pool import StaticPool
 
 from backend.core.database import Base
 from backend.database.models import DataSource, IngestionRun, SeismicEvent
-from backend.ingestion.base_connector import BaseConnector
+from backend.ingestion.base_connector import BaseConnector, ConnectorError
 from backend.ingestion.igp_connector import IGPConnector
+from backend.ingestion.igp_historical_connector import IGPHistoricalCatalogConnector
 from backend.ingestion.normalizer import normalize_igp_event
 from backend.services.ingestion_service import sync_source
 
@@ -36,8 +39,9 @@ IGP_PAYLOAD = {
 class FixtureConnector(BaseConnector):
 	provider_key = "igp"
 
-	def __init__(self, payload: dict) -> None:
+	def __init__(self, payload: dict, records_skipped: int = 0) -> None:
 		self.payload = payload
+		self.records_skipped = records_skipped
 
 	def fetch_events(self) -> list[dict]:
 		return [self.payload]
@@ -96,6 +100,54 @@ def test_igp_connector_accepts_verified_json_and_ignores_simulacros() -> None:
 	assert connector.fetch_events() == [IGP_PAYLOAD]
 
 
+def test_igp_historical_connector_parses_official_xlsx_and_uses_stable_ids() -> None:
+	workbook = Workbook()
+	sheet = workbook.active
+	assert sheet is not None
+	sheet.append(["fecha UTC", "hora UTC", "latitud (°)", "longitud (°)", "profundidad (km)", "magnitud (mb)", "magnitud (Ms)", "magnitud (Mw)"])
+	sheet.append(["1552-07-02", "10:30:00.00", -16.6, -71.3, 30, 7.6, "-", "-"])
+	sheet.append(["1741-08-25", "00:00:00.00", -3.1, -78.1, "-", "-", 6.8, "-"])
+	stream = BytesIO()
+	workbook.save(stream)
+	workbook.close()
+	workbook_bytes = stream.getvalue()
+
+	def handler(request: httpx.Request) -> httpx.Response:
+		assert request.url.params["tipoCatalogo"] == "Historico"
+		assert request.url.params["fechaInicio"] == "1471-01-01"
+		assert request.url.params["fechaFin"] == "1959-12-31"
+		return httpx.Response(
+			200,
+			content=workbook_bytes,
+			headers={"Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"},
+		)
+
+	connector = IGPHistoricalCatalogConnector(
+		endpoint="https://igp.example/api/catalog",
+		transport=httpx.MockTransport(handler),
+	)
+	events = connector.fetch_events()
+
+	assert len(events) == 1
+	assert connector.records_skipped == 1
+	assert events[0]["codigo"].startswith("igp-historical-")
+	assert events[0]["fecha_hora"] == "1552-07-02T10:30:00+00:00"
+	assert events[0]["magnitud"] == 7.6
+	assert events[0]["tipo_magnitud"] == "MB"
+	assert events[0]["source_url"] == "https://ultimosismo.igp.gob.pe/repositorio/datos-sismicos"
+	assert normalize_igp_event(events[0]).occurred_at.tzinfo == timezone.utc
+
+
+def test_igp_historical_connector_rejects_non_xlsx_response() -> None:
+	connector = IGPHistoricalCatalogConnector(
+		endpoint="https://igp.example/api/catalog",
+		transport=httpx.MockTransport(lambda _: httpx.Response(200, text="not an XLSX")),
+	)
+
+	with pytest.raises(ConnectorError, match="unexpected content type"):
+		connector.fetch_events()
+
+
 def test_sync_is_idempotent_and_tracks_provider_revisions(db_session: Session) -> None:
 	source = db_session.scalar(select(DataSource).where(DataSource.provider_key == "igp"))
 	assert source is not None
@@ -115,3 +167,16 @@ def test_sync_is_idempotent_and_tracks_provider_revisions(db_session: Session) -
 	assert db_session.scalar(select(func.count(SeismicEvent.id))) == 1
 	assert db_session.scalar(select(SeismicEvent.magnitude)) == 3.9
 	assert db_session.scalar(select(func.count(IngestionRun.id))) == 3
+
+
+def test_sync_persists_skipped_source_records(db_session: Session) -> None:
+	source = db_session.scalar(select(DataSource).where(DataSource.provider_key == "igp"))
+	assert source is not None
+	connector = FixtureConnector(IGP_PAYLOAD, records_skipped=2)
+
+	run = sync_source(db_session, source, connector, send_alerts=False)
+
+	assert run.status == "succeeded"
+	assert run.records_seen == 3
+	assert run.records_inserted == 1
+	assert run.records_skipped == 2

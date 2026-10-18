@@ -10,7 +10,10 @@ from backend.api.v1.schemas import ExperimentCreateRequest, ExperimentResponse
 from backend.core.database import get_db
 from backend.core.security import require_csrf, require_permissions
 from backend.database.models import Dataset, MLExperiment, User
-from backend.ml.training import train_magnitude_baseline
+from backend.ml.training import train_magnitude_baseline, train_magnitude_classification_baseline
+import numpy
+import pandas
+import sklearn
 
 
 router = APIRouter(prefix="/ml", tags=["machine-learning"])
@@ -46,24 +49,36 @@ def create_experiment(
 	if dataset is None:
 		raise HTTPException(status_code=404, detail="Dataset not found")
 	try:
-		result = train_magnitude_baseline(dataset.records_json, request.test_fraction)
+		if request.task_type == "classification":
+			result = train_magnitude_classification_baseline(dataset.records_json, request.test_fraction)
+		else:
+			result = train_magnitude_baseline(dataset.records_json, request.test_fraction)
 	except ValueError as error:
 		raise HTTPException(status_code=422, detail=str(error)) from error
 
 	experiment = MLExperiment(
 		name=request.name,
-		task_type="regression",
+		task_type=request.task_type,
 		algorithm=result.algorithm,
 		dataset_id=dataset.id,
 		feature_spec=result.feature_names,
 		target_name=result.target_name,
-		params={"test_fraction": request.test_fraction, "random_seed": None},
+		params={
+			"test_fraction": request.test_fraction,
+			"random_seed": 42 if request.task_type == "classification" else None,
+			"library_versions": {
+				"numpy": numpy.__version__,
+				"pandas": pandas.__version__,
+				"scikit_learn": sklearn.__version__,
+			},
+		},
 		metrics=result.metrics,
 		validation_spec={
 			"strategy": "chronological_holdout",
 			"train_period": list(result.train_period),
 			"evaluation_period": list(result.evaluation_period),
 			"row_count": result.row_count,
+			**result.validation_details,
 		},
 		status="completed",
 		limitations=LIMITATIONS,

@@ -49,3 +49,26 @@ export async function updateUser(
 export function listAuditLogs(): Promise<AuditEntry[]> {
 	return apiRequest<AuditEntry[]>("/admin/audit-logs?limit=200");
 }
+
+export interface PlatformSettings {
+	audit_retention_days: number;
+	alert_history_retention_days: number;
+	report_retention_days: number;
+}
+
+export function getPlatformSettings(): Promise<PlatformSettings> {
+	return apiRequest<PlatformSettings>("/admin/settings");
+}
+
+export function updatePlatformSettings(settings: PlatformSettings): Promise<PlatformSettings> {
+	return apiRequest<PlatformSettings>("/admin/settings", { method: "PATCH", body: JSON.stringify(settings) });
+}
+
+export function runRetentionCleanup(): Promise<{
+	status: string;
+	deleted_audit_logs: number;
+	deleted_alert_deliveries: number;
+	deleted_report_snapshots: number;
+}> {
+	return apiRequest("/admin/retention/run", { method: "POST" });
+}

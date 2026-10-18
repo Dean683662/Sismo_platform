@@ -27,7 +27,7 @@ export default function AnalisisView() {
 		setLoading(true);
 		Promise.all([
 			getTimeSeries(utcBoundary(startDate), utcBoundary(endDate, true), "week"),
-			getEventGeoJson(utcBoundary(startDate), utcBoundary(endDate, true)),
+			getEventGeoJson({ startDate: utcBoundary(startDate), endDate: utcBoundary(endDate, true) }),
 		])
 			.then(([timeSeries, geoJson]) => {
 				if (!active) return;

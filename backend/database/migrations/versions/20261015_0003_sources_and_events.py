@@ -90,7 +90,7 @@ def upgrade() -> None:
 				"provider_key": "igp",
 				"name": "Último sismo reportado",
 				"organization": "Instituto Geofísico del Perú",
-				"base_url": "https://ultimosismo.igp.gob.pe/api/ultimo-sismo",
+				"base_url": "https://ultimosismo.igp.gob.pe/repositorio/datos-sismicos",
 				"source_type": "official_api",
 				"status": "active",
 			}

@@ -48,6 +48,6 @@ def normalize_igp_event(payload: dict[str, Any]) -> NormalizedSeismicEvent:
 		magnitude_type=payload.get("tipo_magnitud"),
 		depth_km=payload.get("profundidad"),
 		place=payload.get("referencia") or payload.get("superficie") or "Ubicación no especificada",
-		source_url=payload.get("mapa_sismico_url") or "https://ultimosismo.igp.gob.pe/ultimo-sismo",
+		source_url=payload.get("source_url") or payload.get("mapa_sismico_url") or "https://ultimosismo.igp.gob.pe/ultimo-sismo",
 		payload_hash=hashlib.sha256(canonical_payload.encode("utf-8")).hexdigest(),
 	)

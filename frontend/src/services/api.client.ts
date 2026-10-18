@@ -1,4 +1,4 @@
-const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
+export const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? "";
 
 export class ApiError extends Error {
 	constructor(message: string, readonly status: number) {
@@ -35,6 +35,21 @@ export async function apiRequest<T>(path: string, init: RequestInit = {}): Promi
 	}
 	if (response.status === 204) return undefined as T;
 	return response.json() as Promise<T>;
+}
+
+export async function apiDownload(path: string): Promise<Blob> {
+	const response = await fetch(`${apiBaseUrl}/api/v1${path}`, { credentials: "include" });
+	if (!response.ok) {
+		let message = "No se pudo descargar el archivo.";
+		try {
+			const body = await response.json();
+			if (typeof body.detail === "string") message = body.detail;
+		} catch {
+			// Keep the generic error when the server does not return JSON.
+		}
+		throw new ApiError(message, response.status);
+	}
+	return response.blob();
 }
 
 export async function checkApiHealth(signal?: AbortSignal): Promise<boolean> {
