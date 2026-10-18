@@ -1,6 +1,14 @@
 {
 	"rewrites": [
 		{
+			"source": "/api/(.*)",
+			"destination": "https://sismo-platform-5t2a.onrender.com/api/$1"
+		},
+		{
+			"source": "/health",
+			"destination": "https://sismo-platform-5t2a.onrender.com/health"
+		},
+		{
 			"source": "/(.*)",
 			"destination": "/index.html"
 		}
